@@ -56,7 +56,8 @@ odometer: sensor.my_car_odometer
 ## Solar card
 
 The card shows current production, energy produced today and a graph of the last few hours. Drag across the graph to
-read the power at any moment. "Today" is worked out from the sensor's history since midnight in Home Assistant's time
+read the power at any moment. Time labels fall on whole hours and are spaced to fit the card's width, so they don't
+overlap. "Today" is worked out from the sensor's history since midnight in Home Assistant's time
 zone, so you don't need a separate energy sensor.
 
 ```yaml
@@ -71,6 +72,7 @@ hours: 6
 | `entity` | yes | Solar power sensor in W or kW (needs recorder history) |
 | `name` | no | Card title (default `Solar`) |
 | `hours` | no | Hours of history in the graph (default `6`) |
+| `graph` | no | `false` hides the graph and shows just the numbers (default `true`) |
 
 ## Colors
 

@@ -17,8 +17,9 @@
 //   name: Solar
 //   entity: sensor.solar_power   # W or kW
 //   hours: 6                     # graph window
+//   graph: true                  # false shows just the numbers
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 
 const BASE_CSS = `
   :host { display: block; }
@@ -202,7 +203,7 @@ class MinimalEvCard extends HTMLElement {
 class MinimalSolarCard extends HTMLElement {
   setConfig(config) {
     if (!config.entity) throw new Error('entity is required');
-    this._config = { hours: 6, ...config };
+    this._config = { hours: 6, graph: true, ...config };
     this._series = null; // [[ms, watts], ...] step function, oldest first
     this._hover = null;
   }
@@ -230,7 +231,7 @@ class MinimalSolarCard extends HTMLElement {
     if (this._hass) this._fetch();
   }
 
-  disconnectedCallback() { clearInterval(this._timer); }
+  disconnectedCallback() { clearInterval(this._timer); this._resize?.disconnect(); }
 
   // Times follow HA's configured time zone, not the viewing device's.
   _tz() { return this._hass?.config?.time_zone; }
@@ -346,6 +347,8 @@ class MinimalSolarCard extends HTMLElement {
       cursor: q('.cursor'), dot: q('.dot'), ticks: q('.ticks'),
     };
     q('.badge').addEventListener('click', () => moreInfo(this, this._config.entity));
+    this._resize = new ResizeObserver(() => this._render());
+    this._resize.observe(this._el.ticks);
     const scrub = (e) => {
       const r = this._el.plot.getBoundingClientRect();
       this._hover = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
@@ -371,6 +374,9 @@ class MinimalSolarCard extends HTMLElement {
     if (!hass || !el) return;
     el.name.textContent = c.name || 'Solar';
     const raw = num(hass, c.entity), nowW = raw == null ? null : raw * this._scale();
+
+    const graph = c.graph !== false;
+    el.plot.style.display = el.ticks.style.display = graph ? '' : 'none';
 
     if (!this._series) {
       el.big.textContent = nowW != null ? this._fmtW(nowW) : '—';
@@ -402,14 +408,17 @@ class MinimalSolarCard extends HTMLElement {
       : (nowW ?? 0) > 0 ? 'Producing now' : 'Not producing';
     el.today.textContent = `${this._kwhSince(this._midnight()).toFixed(1)} kWh today`;
 
-    // Hour ticks, skipping any that would crowd the "Now" label.
-    const step = c.hours <= 3 ? 0.5 : c.hours <= 6 ? 1 : 2;
+    // Whole-hour labels, spaced by the width actually available so they never overlap:
+    // the smallest of 1, 2, 3, 4, 6 or 12 hours that leaves ~56px per label.
+    const width = el.ticks.clientWidth || 300, pxPerHour = (width * 3600e3) / (now - t0);
+    const step = [1, 2, 3, 4, 6, 12].find((h) => h * pxPerHour >= 56) ?? 12;
     const ticks = [];
     const mid = this._midnight();
     const firstTick = mid + Math.ceil((t0 - mid) / (3600e3 * step)) * 3600e3 * step;
     for (let t = firstTick; t < now; t += 3600e3 * step) {
-      const f = (t - t0) / (now - t0);
-      if (f > 0.03 && f < 0.8) ticks.push(`<span style="left:${(f * 100).toFixed(2)}%">${this._fmtTime(t, step % 1 !== 0)}</span>`);
+      const x = ((t - t0) / (now - t0)) * width;
+      // Keep half a label clear of the left edge and a full label clear of "Now".
+      if (x > 20 && x < width - 56) ticks.push(`<span style="left:${(x / width * 100).toFixed(2)}%">${this._fmtTime(t, false)}</span>`);
     }
     ticks.push('<span class="end" style="left:100%">Now</span>');
     const html = ticks.join('');
