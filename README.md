@@ -21,9 +21,10 @@ module resource (Settings → Dashboards → ⋮ → Resources).
 The card shows range in large type, battery percentage, a charge bar with a marker at the charge limit, and the charge
 state:
 
-- **Charging:** accent color, with charge power and time to the limit when those sensors are set.
-- **Plugged in:** accent color, "Not charging" or "Charged to limit".
-- **Unplugged:** grey, or amber when the battery is under 30%.
+- **Charging:** green, with charge power and time to the limit when those sensors are set.
+- **Plugged in:** green, "Not charging" or "Charged to limit".
+- **Unplugged with a low battery** (under `low_battery`, 40% by default): red, "Battery low".
+- **Unplugged otherwise:** off-white.
 
 The − / + buttons change the charge limit in steps of 5%. Quick taps are combined into one service call, so the car
 isn't woken up once per tap.
@@ -52,6 +53,7 @@ odometer: sensor.my_car_odometer
 | `power` | no | Charge power sensor in kW |
 | `complete_time` | no | Timestamp sensor for when charging finishes |
 | `odometer` | no | Odometer sensor |
+| `low_battery` | no | Battery % below which an unplugged car shows the low color (default `40`) |
 
 ## Solar card
 
@@ -80,7 +82,9 @@ Set these CSS variables in your theme, or on a card with card-mod:
 
 | Variable | Default |
 |---|---|
-| `--minimal-ev-color` | `#6cc28a` |
+| `--minimal-ev-color` | `#6cc28a` (plugged in or charging) |
+| `--minimal-ev-low-color` | `#e82127` (unplugged, battery low) |
+| `--minimal-ev-idle-color` | `var(--primary-text-color)` (unplugged) |
 | `--minimal-solar-color` | `var(--primary-text-color)` |
 
 Everything else uses the standard theme variables (`--primary-text-color`, `--secondary-background-color` and so on).

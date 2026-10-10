@@ -12,6 +12,7 @@
 //   power: sensor.wall_connector_power                  # optional, kW
 //   complete_time: sensor.my_car_time_charge_complete   # optional, timestamp
 //   odometer: sensor.my_car_odometer                    # optional
+//   low_battery: 40                                     # optional, % for the low color
 //
 //   type: custom:minimal-solar-card
 //   name: Solar
@@ -19,13 +20,15 @@
 //   hours: 6                     # graph window
 //   graph: true                  # false shows just the numbers
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 
 const BASE_CSS = `
   :host { display: block; }
   /* Accent colors; override from a theme or card-mod with these variables. */
   :host {
     --minimal-ev-color: #6cc28a;
+    --minimal-ev-low-color: #e82127;
+    --minimal-ev-idle-color: var(--primary-text-color, #eaebec);
     --minimal-solar-color: var(--primary-text-color, #eaebec);
   }
   ha-card { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
@@ -159,13 +162,17 @@ class MinimalEvCard extends HTMLElement {
     if (this._pendingLimit != null && stateLimit === this._pendingLimit) this._pendingLimit = null;
     const limit = this._pendingLimit ?? stateLimit;
     const charging = isOn(hass, c.charging), plugged = charging || isOn(hass, c.plugged);
-    const accent = 'var(--minimal-ev-color)', amber = 'var(--amber-color, #e3bd62)';
-    const tint = (pct) => `color-mix(in srgb, var(--minimal-ev-color) ${pct}%, transparent)`;
+    // One color per state: plugged in or charging, unplugged with a low battery, otherwise.
+    const color = charging || plugged ? 'var(--minimal-ev-color)'
+      : batt != null && batt < (c.low_battery ?? 40) ? 'var(--minimal-ev-low-color)'
+      : 'var(--minimal-ev-idle-color)';
+    const tint = (pct) => `color-mix(in srgb, ${color} ${pct}%, transparent)`;
+    const fg = color, bg = tint(14), fill = color;
+    const target = tint(charging ? 18 : 14);
 
-    let icon, fg, bg, status, fill, target, statusColor = 'var(--secondary-text-color)';
+    let icon, status, statusColor = 'var(--secondary-text-color)';
     if (charging) {
-      icon = 'mdi:ev-station'; fg = accent; bg = tint(16);
-      fill = accent; target = tint(18); statusColor = accent;
+      icon = 'mdi:ev-station'; statusColor = color;
       const parts = ['Charging'];
       const kw = num(hass, c.power);
       if (kw) parts.push(`${kw.toFixed(1)} kW`);
@@ -173,15 +180,14 @@ class MinimalEvCard extends HTMLElement {
       if (done && done > Date.now()) parts.push(`${duration(done - Date.now())} to ${limit ?? ''}%`);
       status = parts.join(' · ');
     } else if (plugged) {
-      icon = 'mdi:power-plug'; fg = accent; bg = tint(12);
-      fill = accent; target = tint(14);
+      icon = 'mdi:power-plug';
       status = batt != null && limit != null && batt >= limit ? 'Plugged in · Charged to limit' : 'Plugged in · Not charging';
+    } else if (color === 'var(--minimal-ev-low-color)') {
+      icon = 'mdi:car-electric'; statusColor = color;
+      status = 'Unplugged · Battery low';
     } else {
-      const low = batt != null && batt < 30;
-      icon = 'mdi:car-electric'; fg = low ? amber : 'var(--disabled-text-color)'; bg = 'rgba(255, 255, 255, 0.05)';
-      fill = low ? amber : 'var(--secondary-text-color)'; target = 'rgba(255, 255, 255, 0.06)';
-      status = low ? 'Unplugged · Battery low' : 'Unplugged';
-      if (low) statusColor = amber;
+      icon = 'mdi:car-electric';
+      status = 'Unplugged';
     }
 
     el.icon.setAttribute('icon', icon);
