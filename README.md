@@ -53,6 +53,7 @@ odometer: sensor.my_car_odometer
 | `power` | no | Charge power sensor in kW |
 | `complete_time` | no | Timestamp sensor for when charging finishes |
 | `odometer` | no | Odometer sensor |
+| `tap_action` | no | Standard [tap action](https://www.home-assistant.io/dashboards/actions/) for the whole card; the − / + buttons keep working |
 | `low_battery` | no | Battery % below which an unplugged car shows the low color (default `40`) |
 
 ## Solar card
@@ -74,7 +75,17 @@ hours: 6
 | `entity` | yes | Solar power sensor in W or kW (needs recorder history) |
 | `name` | no | Card title (default `Solar`) |
 | `hours` | no | Hours of history in the graph (default `6`) |
+| `tap_action` | no | Standard [tap action](https://www.home-assistant.io/dashboards/actions/) for the whole card |
 | `graph` | no | `false` hides the graph and shows just the numbers (default `true`) |
+
+Without a `tap_action`, tapping the icon or the big number opens the entity's more-info dialog. For example, to open
+another dashboard view instead:
+
+```yaml
+tap_action:
+  action: navigate
+  navigation_path: /lovelace/energy
+```
 
 ## Colors
 

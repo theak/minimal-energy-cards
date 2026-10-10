@@ -20,7 +20,7 @@
 //   hours: 6                     # graph window
 //   graph: true                  # false shows just the numbers
 
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 
 const BASE_CSS = `
   :host { display: block; }
@@ -31,6 +31,7 @@ const BASE_CSS = `
     --minimal-ev-idle-color: var(--primary-text-color, #eaebec);
     --minimal-solar-color: var(--primary-text-color, #eaebec);
   }
+  ha-card.tappable { cursor: pointer; }
   ha-card { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
   .head { display: flex; align-items: center; gap: 12px; }
   .badge { width: 36px; height: 36px; flex: none; border-radius: 50%; display: flex;
@@ -54,6 +55,21 @@ const unit = (hass, id, fallback) => hass.states[id]?.attributes?.unit_of_measur
 const isOn = (hass, id) => !!id && hass.states[id]?.state === 'on';
 const moreInfo = (el, entityId) =>
   entityId && el.dispatchEvent(new CustomEvent('hass-more-info', { detail: { entityId }, bubbles: true, composed: true }));
+// tap_action: hand the card's config to HA's own action handler (navigate, more-info, perform-action...).
+// Without one, the icon and big number open more-info for `fallbackEntity`.
+const wireTap = (card, root, getConfig, fallbackEntity) => {
+  const haCard = root.querySelector('ha-card');
+  haCard.addEventListener('click', (e) => {
+    const config = getConfig();
+    if (config.tap_action) {
+      if (e.composedPath().some((n) => n.classList?.contains('no-tap'))) return;
+      card.dispatchEvent(new CustomEvent('hass-action', { detail: { config, action: 'tap' }, bubbles: true, composed: true }));
+    } else if (e.composedPath().some((n) => n.classList?.contains('info-tap'))) {
+      moreInfo(card, fallbackEntity());
+    }
+  });
+};
+
 const duration = (ms) => {
   const m = Math.max(0, Math.round(ms / 60000));
   return m >= 60 ? `${Math.floor(m / 60)} hr ${m % 60} min` : `${m} min`;
@@ -104,15 +120,15 @@ class MinimalEvCard extends HTMLElement {
       </style>
       <ha-card>
         <div class="head">
-          <div class="badge"><ha-icon></ha-icon></div>
+          <div class="badge info-tap"><ha-icon></ha-icon></div>
           <div class="titles"><div class="name"></div><div class="sub status"></div></div>
-          <div class="value"><div class="big range"></div><div class="small pct"></div></div>
+          <div class="value"><div class="big range info-tap"></div><div class="small pct"></div></div>
         </div>
         <div class="bar"><div class="track"><div class="target"></div><div class="fill"></div></div><div class="marker"></div></div>
         <div class="foot">
           <span class="odo"></span>
           <div class="limit">Charge limit
-            <div class="stepper">
+            <div class="stepper no-tap">
               <button class="dec" aria-label="Lower charge limit"><ha-icon icon="mdi:minus"></ha-icon></button>
               <span class="lim"></span>
               <button class="inc" aria-label="Raise charge limit"><ha-icon icon="mdi:plus"></ha-icon></button>
@@ -126,8 +142,7 @@ class MinimalEvCard extends HTMLElement {
       range: q('.range'), pct: q('.pct'), target: q('.target'), fill: q('.fill'),
       marker: q('.marker'), odo: q('.odo'), lim: q('.lim'), limit: q('.limit'),
     };
-    this._el.badge.addEventListener('click', () => moreInfo(this, this._config.range));
-    q('.range').addEventListener('click', () => moreInfo(this, this._config.range));
+    wireTap(this, root, () => this._config, () => this._config.range);
     q('.dec').addEventListener('click', () => this._step(-1));
     q('.inc').addEventListener('click', () => this._step(1));
   }
@@ -192,6 +207,7 @@ class MinimalEvCard extends HTMLElement {
 
     el.icon.setAttribute('icon', icon);
     el.badge.style.color = fg; el.badge.style.background = bg;
+    this.shadowRoot.querySelector('ha-card').classList.toggle('tappable', !!c.tap_action);
     el.name.textContent = c.name || 'Car';
     el.status.textContent = status; el.status.style.color = statusColor;
     el.range.textContent = range != null ? `${Math.round(range)} ${unit(hass, c.range, 'mi')}` : '—';
@@ -323,7 +339,7 @@ class MinimalSolarCard extends HTMLElement {
       </style>
       <ha-card>
         <div class="head">
-          <div class="badge"><ha-icon icon="mdi:solar-power-variant"></ha-icon></div>
+          <div class="badge info-tap"><ha-icon icon="mdi:solar-power-variant"></ha-icon></div>
           <div class="titles"><div class="name"></div><div class="sub"></div></div>
           <div class="value"><div class="big"></div><div class="small today"></div></div>
         </div>
@@ -352,7 +368,7 @@ class MinimalSolarCard extends HTMLElement {
       area: q('.area'), line: q('.line'), top: q('.ylab.top'), mid: q('.ylab.mid'),
       cursor: q('.cursor'), dot: q('.dot'), ticks: q('.ticks'),
     };
-    q('.badge').addEventListener('click', () => moreInfo(this, this._config.entity));
+    wireTap(this, root, () => this._config, () => this._config.entity);
     this._resize = new ResizeObserver(() => this._render());
     this._resize.observe(this._el.ticks);
     const scrub = (e) => {
@@ -378,6 +394,7 @@ class MinimalSolarCard extends HTMLElement {
   _render() {
     const hass = this._hass, el = this._el, c = this._config;
     if (!hass || !el) return;
+    this.shadowRoot.querySelector('ha-card').classList.toggle('tappable', !!c.tap_action);
     el.name.textContent = c.name || 'Solar';
     const raw = num(hass, c.entity), nowW = raw == null ? null : raw * this._scale();
 
